@@ -449,7 +449,9 @@ class Effect{
 				$value += (4 * ($this->amplifier + 1));
 				$entity->setAbsorption($value);
 				break;
-
+			case Effect::LEVITATION:
+				$entity->resetFallDistance();
+				break;
 		}
 	}
 
@@ -491,6 +493,9 @@ class Effect{
 				break;
 			case Effect::ABSORPTION:
 				$entity->setAbsorption($entity->getAbsorption() - (4 * ($this->amplifier + 1)));
+				break;
+			case Effect::LEVITATION:
+				$entity->resetFallDistance();
 				break;
 		}
 	}

@@ -303,7 +303,6 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 	private $spawnPosition = null;
 
 	protected $inAirTicks = 0;
-	protected $startAirTicks = 5;
 
 	//TODO: Abilities
 	protected $autoJump = true;
@@ -495,9 +494,6 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 
 	public function resetFallDistance(){
 		parent::resetFallDistance();
-		if($this->inAirTicks !== 0){
-			$this->startAirTicks = 5;
-		}
 		$this->inAirTicks = 0;
 	}
 
@@ -1595,10 +1591,6 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 				$this->level->addEntityMotion($this->chunk->getX(), $this->chunk->getZ(), $this->getId(), $this->motionX, $this->motionY, $this->motionZ);
 			}
 
-			if($this->motionY > 0){
-				$this->startAirTicks = (-(log($this->gravity / ($this->gravity + $this->drag * $this->motionY))) / $this->drag) * 2 + 5;
-			}
-
 			return true;
 		}
 		return false;
@@ -1649,21 +1641,27 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 		$this->timings->startTiming();
 
 		if($this->spawned){
+			$oldVelocity = $this->speed;
 			$this->processMovement($tickDiff);
 			$this->entityBaseTick($tickDiff);
 
 			if(!$this->isSpectator() and $this->speed !== null){
 				if($this->onGround){
-					if($this->inAirTicks !== 0){
-						$this->startAirTicks = 5;
-					}
 					$this->inAirTicks = 0;
 				}else{
-					if(!$this->allowFlight and $this->inAirTicks > 10 and !$this->isSleeping() and !$this->isImmobile()){
-						$expectedVelocity = (-$this->gravity) / $this->drag - ((-$this->gravity) / $this->drag) * exp(-$this->drag * ($this->inAirTicks - $this->startAirTicks));
+					if(!$this->allowFlight and !$this->isSleeping() and !$this->isImmobile()){
+						if($this->hasEffect(Effect::LEVITATION)){
+							$expectedVelocity = (0.9 / 20) * ($this->getEffect(Effect::LEVITATION)->getAmplifier() + 1);
+						}else{
+							$d = 1 - $this->drag;
+							$g = -$this->gravity;
+							//TODO: allow this to cater for normal movement other than jumping
+							$expectedVelocity = $d ** $tickDiff * $oldVelocity->y + $d * ($g * (1 - $d ** $tickDiff) / (1 - $d));
+						}
+
 						$diff = ($this->speed->y - $expectedVelocity) ** 2;
 
-						if(!$this->hasEffect(Effect::JUMP) and $diff > 0.6 and $expectedVelocity < $this->speed->y and !$this->server->getAllowFlight()){
+						if($diff > 0.6 and $expectedVelocity < $this->speed->y and !$this->server->getAllowFlight()){
 							if($this->inAirTicks < 100){
 								$this->setMotion(new Vector3(0, $expectedVelocity, 0));
 							}elseif($this->kick("Flying is not enabled on this server")){
@@ -1672,8 +1670,7 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 							}
 						}
 					}
-
-					++$this->inAirTicks;
+					$this->inAirTicks += $tickDiff;
 				}
 			}
 		}
@@ -2666,6 +2663,11 @@ class Player extends Human implements CommandSender, InventoryHolder, ChunkLoade
 				$this->scheduleUpdate();
 				break;
 			case PlayerActionPacket::ACTION_JUMP:
+				if($this->speed === null){
+					$this->speed = new Vector3(0, $this->getJumpVelocity(), 0);
+				}else{
+					$this->speed->y = $this->getJumpVelocity();
+				}
 				return true;
 			case PlayerActionPacket::ACTION_START_SPRINT:
 				$ev = new PlayerToggleSprintEvent($this, true);

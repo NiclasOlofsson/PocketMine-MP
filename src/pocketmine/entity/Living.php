@@ -77,6 +77,10 @@ abstract class Living extends Entity implements Damageable{
 		}
 	}
 
+	public function getJumpVelocity() : float{
+		return 0.42 + ($this->hasEffect(Effect::JUMP) ? ($this->getEffect(Effect::JUMP)->getAmplifier() + 1) * 0.1 : 0);
+	}
+
 	public function getMaxHealth(){
 		return $this->attributeMap->getAttribute(Attribute::HEALTH)->getMaxValue();
 	}
